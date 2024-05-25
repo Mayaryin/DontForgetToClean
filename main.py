@@ -1,5 +1,7 @@
 import logging
 import re
+from collections import deque
+
 from dotenv import load_dotenv
 import os
 from typing import Final, Text
@@ -10,16 +12,14 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from datetime import datetime, timedelta
 from apscheduler.triggers.interval import IntervalTrigger
 
+from CleaningSchedule import CleaningSchedule
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-names = ["Norah", "Lynn", "Roxy", "Nico"]
-message_index = 0
-active_chats = set()
 
 # Commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -33,6 +33,12 @@ async def delete_reminder_command(update: Update, context: ContextTypes.DEFAULT_
     for job in current_jobs:
         job.schedule_removal()
     await update.message.reply_text("Your reminder is deleted!")
+
+async def show_mitbewohnys_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    names = cleaning_schedule.schedule
+    text = f"The list is empty, start adding mitbewohnys by typing /add_mitbewohny" if not names else ", ".join(names)
+    await update.message.reply_text(text)
+
 
 
 # Conversations
@@ -48,25 +54,30 @@ async def remove_mitbewohny_command(update: Update, context: ContextTypes.DEFAUL
     return REMOVING
 
 async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not cleaning_schedule.schedule:
+        await update.message.reply_text("Please add at least one mitbewohny first. Type /add_mitbewohny.")
+        return ConversationHandler.END
     await update.message.reply_text('Set up a reminder by specifying the weekday, interval, and time. Eg.: Sunday, 1, 12, 30. This will send out a reminder each week on sundays at 12:30.')
     return SETTING_REMINDER
 
 async def done_adding(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    log("enter done")
     names = parse_names(update.message.text)
-    #TODO: save names to "internal" list
-    await update.message.reply_text(f"I added {names} to the list!")
+    for name in names:
+        cleaning_schedule.save_schedule(name)
+    names_string = ", ".join(names)
+    await update.message.reply_text(f"I added {names_string} to the list!")
     return ConversationHandler.END
 
 async def done_removing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    log("enter done")
     names = parse_names(update.message.text)
-    #TODO: remove names from "internal" list
-    await update.message.reply_text(f"I removed {names} from the list!")
+    for name in names:
+        cleaning_schedule.schedule.remove(name)
+    names_string = ", ".join(names)
+    await update.message.reply_text(f"I removed {names_string} from the list!")
     return ConversationHandler.END
 
 async def done_setting_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    log("enter done")
+
     #TODO: clean up this integer string mess
     info = update.message.text.split(", ")
     day = info[0].lower()
@@ -75,7 +86,7 @@ async def done_setting_reminder(update: Update, context: ContextTypes.DEFAULT_TY
     chat_id = update.effective_message.chat_id
     # TODO: make timezone adjustable
     timezone = get_localzone()
-    context.job_queue.run_custom(reminder, job_kwargs={"trigger": IntervalTrigger(weeks=interval_as_int,
+    context.job_queue.run_custom(reminder, job_kwargs={"trigger": IntervalTrigger(seconds=interval_as_int,
         start_date=determine_start_date(day_as_int, hour_as_int, minute_as_int, timezone))
     }, chat_id=chat_id)
 
@@ -86,18 +97,17 @@ async def done_setting_reminder(update: Update, context: ContextTypes.DEFAULT_TY
     return ConversationHandler.END
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    log("enter done")
     await update.message.reply_text(f"Okay, lets quit this.")
     return ConversationHandler.END
 
 # Job callback function
 async def reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
-    #name = get_mitbewohny()
-    await context.bot.send_message(context.job.chat_id, text=f"Placeholder has to clean the flat this week!")
+    name = cleaning_schedule.get_next_person()
+    await context.bot.send_message(context.job.chat_id, text=f"{name} has to clean the flat this week!")
 
 # Helper functions
 def parse_names(text: Text):
-    return [name for name in text.split(", ") if name]
+    return [name.lower() for name in text.split(", ") if name]
 
 def parse_timer_settings(text: Text) -> int:
     info = text.split(", ")
@@ -137,6 +147,8 @@ def determine_start_date(target_weekday, hour, minute, timezone):
         f"start date: {start_date}")
     return start_date
 
+
+
 def log(message: Text):
     logger.log(20, message)
 
@@ -150,9 +162,13 @@ if __name__ == '__main__':
     log("Bot is running..")
     app = Application.builder().token(token).build()
 
+    # Initialize schedule
+    cleaning_schedule = CleaningSchedule()
+
     # Commands
     app.add_handler(CommandHandler('start', start_command))
     app.add_handler(CommandHandler('delete_reminder', delete_reminder_command))
+    app.add_handler(CommandHandler('show_mitbewohnys', show_mitbewohnys_command))
 
     # Conversations
     adding_conv_handler = ConversationHandler(
@@ -190,7 +206,7 @@ if __name__ == '__main__':
     app.add_handler(removing_conv_handler)
     app.add_handler(setting_reminder_conv_handler)
 
-    #TDOD: add error handlers
+    #TODO: add error handlers
 
 
     # Run the bot
