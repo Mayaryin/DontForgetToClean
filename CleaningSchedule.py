@@ -32,10 +32,8 @@ class CleaningSchedule:
 
     def save_schedule(self, names=None, weekday=None, interval=None, hour=None, minute=None):
         if names:
-            if isinstance(names, list):
-                self.names.extend(names)
-            else:
-                self.names.append(names)
+            for name in names:
+                self.names.append(name.lower())
         if weekday:
             self.weekday = weekday
         if interval:
@@ -57,7 +55,7 @@ class CleaningSchedule:
     def update_names(self, names):
         for name in names:
             try:
-                self.names.remove(name)
+                self.names.remove(name.lower())
                 log(f"Removed {name} from the schedule.")
             except ValueError:
                 log_error(f"{name} is not in the schedule.")
@@ -69,7 +67,7 @@ class CleaningSchedule:
         next_person = self.names[0]
         self.names.rotate(-1)
         self.save_schedule()
-        return next_person
+        return next_person.capitalize()
 
 
 

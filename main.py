@@ -72,6 +72,7 @@ async def done_adding(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 async def done_removing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     names = parse_names(update.message.text)
     cleaning_schedule.update_names(names)
+    cleaning_schedule.update_names(names)
     names_string = ", ".join(names)
     await update.message.reply_text(f"I removed {names_string} from the list!")
     return ConversationHandler.END
@@ -114,7 +115,7 @@ async def reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
     delay = 60
     for attempt in range(retries):
         try:
-            await context.bot.send_message(context.job.chat_id, text=f"{name} has to clean the flat this week!")
+            await context.bot.send_message(context.job.chat_id, text=f"🧼 {name} will clean the flat this week ✨ ")
             log(f"Message sent successfully on attempt {attempt + 1}")
             break
         except NetworkError as e:

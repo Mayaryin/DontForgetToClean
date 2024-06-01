@@ -20,7 +20,7 @@ def log_error(message: Text):
 
 # Helper functions
 def parse_names(text: Text):
-    return [name.lower() for name in text.split(", ") if name]
+    return [name for name in text.split(", ") if name]
 
 def convert_timer_settings(info) -> int:
     day = weekday_to_int(info[0].lower())
