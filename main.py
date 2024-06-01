@@ -1,5 +1,7 @@
+import asyncio
 import os
 from dotenv import load_dotenv
+from telegram.error import NetworkError
 from tzlocal import get_localzone
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, \
@@ -22,8 +24,20 @@ async def delete_reminder_command(update: Update, context: ContextTypes.DEFAULT_
         job.schedule_removal()
     await update.message.reply_text("Your reminder is deleted!")
 
-async def show_mitbewohnys_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    names = cleaning_schedule.schedule
+async def show_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    job = context.job_queue.get_jobs_by_name('onlyjob')
+    if not job:
+        text = "There is no reminder. Start the set up by typing /set_reminder."
+    else:
+        interval = cleaning_schedule.interval
+        log(f"interval: {interval}")
+        text = f"Your current reminder is sent out on {cleaning_schedule.weekday}s every week" if interval == 1 \
+        else f"Your current reminder is sent out on {cleaning_schedule.weekday}s every {interval} weeks"
+        text = text + f" at {cleaning_schedule.hour}:{cleaning_schedule.minute}"
+    await update.message.reply_text(text)
+
+async def show_mitbewohnies_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    names = cleaning_schedule.names
     text = f"The list is empty, start adding mitbewohnys by typing /add_mitbewohny" if not names else ", ".join(names)
     await update.message.reply_text(text)
 
@@ -40,24 +54,24 @@ async def remove_mitbewohny_command(update: Update, context: ContextTypes.DEFAUL
     return REMOVING
 
 async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not cleaning_schedule.schedule:
+    if not cleaning_schedule.names:
         await update.message.reply_text("Please add at least one mitbewohny first. Type /add_mitbewohny.")
         return ConversationHandler.END
-    await update.message.reply_text('Set up a reminder by specifying the weekday, interval, and time. Eg.: Sunday, 1, 12, 30. This will send out a reminder each week on sundays at 12:30.')
+    await update.message.reply_text('Set up a reminder by specifying the weekday, interval, and time. \n'
+                                    'Eg.: Sunday, 1, 12, 30. This will send out a reminder each week on sundays at 12:30.\n'
+                                    'Note: There is always only one job at a time. Any current job will be overwritten.')
     return SETTING_REMINDER
 
 async def done_adding(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     names = parse_names(update.message.text)
-    for name in names:
-        cleaning_schedule.save_schedule(name)
+    cleaning_schedule.save_schedule(names)
     names_string = ", ".join(names)
     await update.message.reply_text(f"I added {names_string} to the list!")
     return ConversationHandler.END
 
 async def done_removing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     names = parse_names(update.message.text)
-    for name in names:
-        cleaning_schedule.schedule.remove(name)
+    cleaning_schedule.update_names(names)
     names_string = ", ".join(names)
     await update.message.reply_text(f"I removed {names_string} from the list!")
     return ConversationHandler.END
@@ -66,16 +80,23 @@ async def done_setting_reminder(update: Update, context: ContextTypes.DEFAULT_TY
     if not validate_input(update.message.text):
         await update.message.reply_text("Please stick to the format. Example: Sunday, 1, 12, 30")
 
+    # delete current job
+    for job in context.job_queue.jobs():
+        job.schedule_removal()
+
     info = update.message.text.split(", ")
     day_as_int, interval_as_int, hour_as_int, minute_as_int = convert_timer_settings(info)
     timezone = get_localzone()
-    chat_id = update.effective_message.chat_id
-    context.job_queue.run_custom(reminder, job_kwargs={"trigger": IntervalTrigger(weeks=interval_as_int,
-        start_date=determine_start_date(day_as_int, hour_as_int, minute_as_int, timezone))
-    }, chat_id=chat_id)
-
     day = info[0]
     interval = info[1]
+    chat_id = update.effective_message.chat_id
+
+    context.job_queue.run_custom(reminder, job_kwargs={"trigger": IntervalTrigger(weeks=interval_as_int,
+        start_date=determine_start_date(day_as_int, hour_as_int, minute_as_int, timezone))
+    }, name="onlyjob", chat_id=chat_id)
+
+    cleaning_schedule.save_schedule(weekday=day, interval=interval_as_int, hour=hour_as_int, minute=minute_as_int)
+
     text =f"Your reminder will be sent out on {day}s every week!" if interval == "1" \
         else f"Your reminder will be sent out on {day}s every {interval} weeks!"
 
@@ -89,10 +110,21 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # Job callback function
 async def reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
     name = cleaning_schedule.get_next_person()
-    await context.bot.send_message(context.job.chat_id, text=f"{name} has to clean the flat this week!")
+    retries = 3
+    delay = 60
+    for attempt in range(retries):
+        try:
+            await context.bot.send_message(context.job.chat_id, text=f"{name} has to clean the flat this week!")
+            log(f"Message sent successfully on attempt {attempt + 1}")
+            break
+        except NetworkError as e:
+            log_error(f"Failed to send message on attempt {attempt + 1}: {e}")
+            if attempt < retries - 1:
+                await asyncio.sleep(delay)
+            else:
+                log_error("All retry attempts failed.")
 
 # Error
-
 async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_error(f'Update {update.update_id} caused error: {context.error}')
 
@@ -112,7 +144,8 @@ if __name__ == '__main__':
     # Commands
     app.add_handler(CommandHandler('start', start_command))
     app.add_handler(CommandHandler('delete_reminder', delete_reminder_command))
-    app.add_handler(CommandHandler('show_mitbewohnys', show_mitbewohnys_command))
+    app.add_handler(CommandHandler('show_mitbewohnies', show_mitbewohnies_command))
+    app.add_handler(CommandHandler('show_reminder', show_reminder_command))
 
     # Conversations
     adding_conv_handler = ConversationHandler(
