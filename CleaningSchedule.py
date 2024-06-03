@@ -59,15 +59,29 @@ class CleaningSchedule:
                 log(f"Removed {name} from the schedule.")
             except ValueError:
                 log_error(f"{name} is not in the schedule.")
+                raise NameNotFoundError(name)
 
+        schedule = {
+            "names": list(self.names),
+            "weekday": self.weekday,
+            "interval": self.interval,
+            "hour": self.hour,
+            "minute": self.minute
+        }
         with open(self.filename, "w") as file:
-            json.dump(list(self.names), file)
+            json.dump(schedule, file)
 
     def get_next_person(self):
         next_person = self.names[0]
         self.names.rotate(-1)
         self.save_schedule()
         return next_person.capitalize()
+
+
+class NameNotFoundError(Exception):
+    def __init__(self, name):
+        self.name = name
+        super().__init__(f"Names not found: {', '.join(name)}")
 
 
 

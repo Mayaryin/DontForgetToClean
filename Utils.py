@@ -45,7 +45,7 @@ def weekday_to_int(weekday_name):
 
 def validate_input(text: str):
     pattern = re.compile(
-        r'^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s*[0-9],\s*(0?[0-9]|1[0-9]|2[0-3]),\s*(0?[0-9]|[1-5][0-9])$')
+        r'^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s*[0-9],\s*(0?[0-9]|1[0-9]|2[0-3]),\s*(0?[0-9]|[1-5][0-9])$', re.IGNORECASE)
     if pattern.match(text):
         return True
     return False
