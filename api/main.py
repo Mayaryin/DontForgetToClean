@@ -3,13 +3,16 @@ import os
 from dotenv import load_dotenv
 from telegram.error import NetworkError
 from tzlocal import get_localzone
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, \
-    ConversationHandler
+from telegram import Update, Bot
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 from apscheduler.triggers.interval import IntervalTrigger
+
+from flask import Flask, request
 
 from CleaningSchedule import CleaningSchedule, NameNotFoundError
 from Utils import *
+
+app = Flask(__name__)
 
 # Commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -146,6 +149,7 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 if __name__ == '__main__':
+
     load_dotenv()
     token = os.getenv('TOKEN')
     bot_username = os.getenv('BOT_USERNAME')
@@ -155,16 +159,22 @@ if __name__ == '__main__':
         log_error("Bot username not found")
 
     log("Bot is running..")
-    app = Application.builder().token(token).build()
+    telegram_app = Application.builder().token(token).build()
+
+    @app.route('/webhook', methods=['POST'])
+    async def webhook():
+        update = Update.de_json(request.get_json(force=True), telegram_app.bot)
+        await telegram_app.process_update(update)
+        return 'ok'
 
     # Initialize schedule
     cleaning_schedule = CleaningSchedule()
 
     # Commands
-    app.add_handler(CommandHandler('start', start_command))
-    app.add_handler(CommandHandler('delete_reminder', delete_reminder_command))
-    app.add_handler(CommandHandler('show_mitbewohnies', show_mitbewohnies_command))
-    app.add_handler(CommandHandler('show_reminder', show_reminder_command))
+    telegram_app.add_handler(CommandHandler('start', start_command))
+    telegram_app.add_handler(CommandHandler('delete_reminder', delete_reminder_command))
+    telegram_app.add_handler(CommandHandler('show_mitbewohnies', show_mitbewohnies_command))
+    telegram_app.add_handler(CommandHandler('show_reminder', show_reminder_command))
 
     # Conversations
     adding_conv_handler = ConversationHandler(
@@ -200,14 +210,16 @@ if __name__ == '__main__':
     )
 
 
-    app.add_handler(adding_conv_handler)
-    app.add_handler(removing_conv_handler)
-    app.add_handler(setting_reminder_conv_handler)
+    telegram_app.add_handler(adding_conv_handler)
+    telegram_app.add_handler(removing_conv_handler)
+    telegram_app.add_handler(setting_reminder_conv_handler)
 
     # Errors
-    app.add_error_handler(error)
+    telegram_app.add_error_handler(error)
 
     # Run the bot
     log("Polling..")
-    app.run_polling(poll_interval=3)
+    #telegram_app.run_polling(3)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
 
