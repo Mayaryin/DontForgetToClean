@@ -1,7 +1,7 @@
 from collections import deque
 import json
 
-from Utils import log, log_error
+from utils import log, log_error
 
 
 class CleaningSchedule:

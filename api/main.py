@@ -9,8 +9,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from flask import Flask, request
 
-from CleaningSchedule import CleaningSchedule, NameNotFoundError
-from Utils import *
+from api.cleaning_schedule import CleaningSchedule, NameNotFoundError
+from api.utils import *
 
 app = Flask(__name__)
 
