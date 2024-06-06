@@ -126,6 +126,7 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 # Job callback function
 async def reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
+    log("trying to send reminder..")
     name = cleaning_schedule.get_next_person()
     retries = 3
     delay = 60
