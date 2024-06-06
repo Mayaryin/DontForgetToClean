@@ -3,16 +3,14 @@ import os
 from dotenv import load_dotenv
 from telegram.error import NetworkError
 from tzlocal import get_localzone
-from telegram import Update, Bot
+from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from flask import Flask, request
-
-from api.cleaning_schedule import CleaningSchedule, NameNotFoundError
-from api.utils import *
-
-app = Flask(__name__)
+from cleaning_schedule import CleaningSchedule, NameNotFoundError
+from utils import *
+from keep_alive import keep_alive
+keep_alive()
 
 # Commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -151,21 +149,18 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
 
     load_dotenv()
-    token = os.getenv('TOKEN')
-    bot_username = os.getenv('BOT_USERNAME')
-    if not token:
-        log_error("Bot token not found")
-    if not bot_username:
-        log_error("Bot username not found")
+    #token = os.getenv('TOKEN')
+    token = os.environ.get('token')
+    # bot_username = os.getenv('BOT_USERNAME')
+    # if not token:
+    #     log_error("Bot token not found")
+    # if not bot_username:
+    #     log_error("Bot username not found")
 
     log("Bot is running..")
     telegram_app = Application.builder().token(token).build()
 
-    @app.route('/webhook', methods=['POST'])
-    async def webhook():
-        update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-        await telegram_app.process_update(update)
-        return 'ok'
+
 
     # Initialize schedule
     cleaning_schedule = CleaningSchedule()
@@ -219,7 +214,6 @@ if __name__ == '__main__':
 
     # Run the bot
     log("Polling..")
-    #telegram_app.run_polling(3)
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    telegram_app.run_polling(3)
+
 

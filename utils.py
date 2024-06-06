@@ -4,7 +4,6 @@ from typing import Text
 from datetime import datetime, timedelta
 
 
-
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 
