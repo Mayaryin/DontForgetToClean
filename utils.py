@@ -19,6 +19,8 @@ def log_error(message: Text):
 
 # Helper functions
 def parse_names(text: Text):
+    if "/" in text:
+        raise ValueError("Special character in name")
     return [name for name in text.split(", ") if name]
 
 def convert_timer_settings(info) -> int:

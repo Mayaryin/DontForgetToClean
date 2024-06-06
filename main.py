@@ -9,8 +9,6 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from cleaning_schedule import CleaningSchedule, NameNotFoundError
 from utils import *
-from keep_alive import keep_alive
-keep_alive()
 
 # Commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -45,6 +43,10 @@ async def show_mitbewohnies_command(update: Update, context: ContextTypes.DEFAUL
         if not names else ", ".join(names)
     await update.message.reply_text(text)
 
+async def exit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('Cancelled')
+    return ConversationHandler.END
+
 # Conversations
 ADDING = range(1)
 REMOVING = range(1)
@@ -67,6 +69,8 @@ async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SCHEDULING_JOB
 
 async def done_adding(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.message.text == '/exit':
+        return await exit_command(update, context)
     names = parse_names(update.message.text)
     cleaning_schedule.save_schedule(names)
     names_string = ", ".join(names)
@@ -74,6 +78,8 @@ async def done_adding(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     return ConversationHandler.END
 
 async def done_removing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.message.text == '/exit':
+        return await exit_command(update, context)
     names = parse_names(update.message.text)
     try:
         cleaning_schedule.update_names(names)
@@ -85,8 +91,13 @@ async def done_removing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 async def schedule_job(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     incoming_message: str = update.message.text
+
+    if incoming_message == '/exit':
+        return await exit_command(update, context)
+
     if not validate_input(incoming_message):
         await update.message.reply_text("Please stick to the format. Example: Sunday, 1, 12, 30")
+
     else:
         text = schedule(update, context, incoming_message)
         await update.message.reply_text(text)
@@ -119,11 +130,6 @@ def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
 
     return text
 
-
-async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text(f"Okay, lets quit this.")
-    return ConversationHandler.END
-
 # Job callback function
 async def reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
     log("trying to send reminder..")
@@ -150,18 +156,12 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
 
     load_dotenv()
-    #token = os.getenv('TOKEN')
-    token = os.environ.get('token')
-    # bot_username = os.getenv('BOT_USERNAME')
-    # if not token:
-    #     log_error("Bot token not found")
-    # if not bot_username:
-    #     log_error("Bot username not found")
+    token = os.getenv('TOKEN')
+    if not token:
+        log_error("Bot token not found")
 
     log("Bot is running..")
     telegram_app = Application.builder().token(token).build()
-
-
 
     # Initialize schedule
     cleaning_schedule = CleaningSchedule()
@@ -172,6 +172,7 @@ if __name__ == '__main__':
     telegram_app.add_handler(CommandHandler('show_mitbewohnies', show_mitbewohnies_command))
     telegram_app.add_handler(CommandHandler('show_reminder', show_reminder_command))
 
+
     # Conversations
     adding_conv_handler = ConversationHandler(
         entry_points=[CommandHandler("add_mitbewohny", add_mitbewohny_command)],
@@ -180,7 +181,7 @@ if __name__ == '__main__':
                 MessageHandler(filters.ALL, done_adding)
             ],
         },
-        fallbacks=[MessageHandler(filters.Regex("^Done$"), done)],
+        fallbacks=[CommandHandler('exit', exit_command)],
     )
 
     removing_conv_handler = ConversationHandler(
@@ -190,7 +191,7 @@ if __name__ == '__main__':
                 MessageHandler(filters.ALL, done_removing)
             ],
         },
-        fallbacks=[MessageHandler(filters.Regex("^Done$"), done)],
+        fallbacks=[CommandHandler('exit', exit_command)],
     )
 
     setting_reminder_conv_handler = ConversationHandler(
@@ -201,7 +202,7 @@ if __name__ == '__main__':
             ],
 
         },
-        fallbacks=[MessageHandler(filters.Regex("^Done$"), done)],
+        fallbacks=[CommandHandler('exit', exit_command)],
         per_chat=True, per_user=True,
     )
 
