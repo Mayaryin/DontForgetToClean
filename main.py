@@ -34,7 +34,7 @@ async def show_reminder_command(update: Update, context: ContextTypes.DEFAULT_TY
         minute_string = str(cleaning_schedule.minute)
         if cleaning_schedule.minute < 10:
             minute_string = "0" + str(cleaning_schedule.minute)
-        text = f"Your current reminder is sent out on {cleaning_schedule.weekday.capitallize()} every week" if interval == 1 \
+        text = f"Your current reminder is sent out on {cleaning_schedule.weekday.capitalize()} every week" if interval == 1 \
         else f"Your current reminder is sent out on {cleaning_schedule.weekday.capitalize()} every {interval} weeks"
         text = text + f" at {cleaning_schedule.hour}:{minute_string}"
     await update.message.reply_text(text)
